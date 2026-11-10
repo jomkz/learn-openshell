@@ -34,6 +34,10 @@ install_binary() {
 }
 
 case "${1:-help}" in
+  coco)
+    shift
+    exec python3 "$LAB_ROOT/coco/lab.py" "$@"
+    ;;
   setup)
     [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || {
       echo 'This lab is pinned to Linux x86_64.' >&2; exit 1;
@@ -131,6 +135,7 @@ learn-openshell: OpenShell 0.1.7 learning lab (Linux x86_64, rootless Podman).
   ./lab allow     Add the read-only rule manually
   ./lab delete    Delete only the learning sandbox (gateway must still be running)
   ./lab cli ...   Use the pinned CLI with this lab's gateway and configuration
+  ./lab coco ...  Run the optional Kata / CoCo non-TEE VM lab (see docs/coco-nontee.md)
 EOF
     ;;
 esac

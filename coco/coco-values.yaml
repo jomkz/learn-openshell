@@ -1,0 +1,37 @@
+# Only the development shim is needed. This class does not provide TEE protection.
+kata-as-coco-runtime:
+  k8sDistribution: k3s
+  imagePullPolicy: IfNotPresent
+  defaultShim:
+    amd64: qemu-coco-dev
+  shims:
+    qemu-snp:
+      enabled: false
+    qemu-tdx:
+      enabled: false
+    qemu-coco-dev:
+      enabled: true
+    qemu-coco-dev-runtime-rs:
+      enabled: false
+    qemu-nvidia-gpu-snp:
+      enabled: false
+    qemu-nvidia-gpu-tdx:
+      enabled: false
+    clh-azure:
+      enabled: false
+    clh-azure-runtime-rs:
+      enabled: false
+    clh-runtime-rs:
+      enabled: false
+    openvmm-azure-runtime-rs:
+      enabled: false
+    qemu-nvidia-cpu:
+      enabled: false
+    qemu-nvidia-cpu-runtime-rs:
+      enabled: false
+    qemu-nvidia-gpu-runtime-rs:
+      enabled: false
+    qemu-nvidia-gpu-snp-runtime-rs:
+      enabled: false
+    qemu-nvidia-gpu-tdx-runtime-rs:
+      enabled: false

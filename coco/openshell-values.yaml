@@ -1,0 +1,10 @@
+# Local, disposable VM only. The gateway is reached through a loopback forward.
+gatewayConfig:
+  openshell.drivers.kubernetes:
+    supervisor_topology: gateway
+supervisor:
+  recoveryTimeoutSeconds: 300
+server:
+  auth:
+    allowUnauthenticatedUsers: true
+  telemetryEnabled: false
