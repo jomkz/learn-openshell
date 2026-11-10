@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+LAB_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+LAB_STATE="$LAB_ROOT/.local"
+LAB_NAME=learn-openshell
+LAB_SANDBOX=learning
+LAB_IMAGE=localhost/learn-openshell-tools:0.1.7
+LAB_ENDPOINT=https://127.0.0.1:17671
+LAB_SOCKET="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/podman/podman.sock"
+
+LAB_ENV=(env -u OPENSHELL_GATEWAY_ENDPOINT -u OPENSHELL_GATEWAY_INSECURE
+  -u OPENSHELL_GATEWAY_CONFIG -u OPENSHELL_WORKSPACE
+  XDG_CONFIG_HOME="$LAB_STATE/config" XDG_STATE_HOME="$LAB_STATE/state"
+  XDG_DATA_HOME="$LAB_STATE/data" XDG_CACHE_HOME="$LAB_STATE/cache"
+  OPENSHELL_LOCAL_TLS_DIR="$LAB_STATE/tls" OPENSHELL_TELEMETRY_ENABLED=false)
+osenv() { "${LAB_ENV[@]}" "$@"; }
+os() { osenv "$LAB_STATE/bin/openshell" --gateway "$LAB_NAME" "$@"; }
+remote() { os sandbox exec "$LAB_SANDBOX" --no-tty --no-login-shell --timeout 30 -- "$@"; }
+require_install() {
+  [[ -x "$LAB_STATE/bin/openshell-gateway" && -f "$LAB_STATE/tls/ca.crt" ]] || {
+    echo 'Run ./lab setup first.' >&2; exit 1;
+  }
+}
+install_binary() {
+  local binary=$1 target=$2 checksum=$3 archive
+  archive="$binary-$target.tar.gz"
+  curl --fail --location --silent --show-error --retry 2 \
+    "https://github.com/NVIDIA/OpenShell/releases/download/v0.1.7/$archive" \
+    -o "$LAB_STATE/downloads/$archive"
+  printf '%s  %s\n' "$checksum" "$LAB_STATE/downloads/$archive" | sha256sum --check -
+  tar -xzf "$LAB_STATE/downloads/$archive" -C "$LAB_STATE/bin" "$binary"
+  chmod 755 "$LAB_STATE/bin/$binary"
+}
+
+case "${1:-help}" in
+  setup)
+    [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || {
+      echo 'This lab is pinned to Linux x86_64.' >&2; exit 1;
+    }
+    for cmd in curl sha256sum tar podman systemctl python3; do command -v "$cmd" >/dev/null; done
+    mkdir -p "$LAB_STATE"/{bin,downloads,config,state,data,cache,tls}
+    install_binary openshell x86_64-unknown-linux-musl \
+      5c1adfcae797eac9b2e8b9280c66c1f75e4e84d9e31ce6938c5b994314ef6098
+    install_binary openshell-gateway x86_64-unknown-linux-gnu \
+      e1714dcfd85c949e2f53260bcfbf04b203f6f5cbd3a61e61c11c38cbc91cb102
+    systemctl --user start podman.socket
+    osenv "$LAB_STATE/bin/openshell-gateway" generate-certs \
+      --output-dir "$LAB_STATE/tls" --server-san host.openshell.internal
+    mkdir -p "$LAB_STATE/config/openshell/gateways/$LAB_NAME/mtls"
+    cp "$LAB_STATE/tls/ca.crt" "$LAB_STATE/config/openshell/gateways/$LAB_NAME/mtls/ca.crt"
+    cp "$LAB_STATE/tls/client/tls.crt" "$LAB_STATE/config/openshell/gateways/$LAB_NAME/mtls/tls.crt"
+    cp "$LAB_STATE/tls/client/tls.key" "$LAB_STATE/config/openshell/gateways/$LAB_NAME/mtls/tls.key"
+    osenv "$LAB_STATE/bin/openshell" gateway add "$LAB_ENDPOINT" --local --name "$LAB_NAME"
+    podman build -t "$LAB_IMAGE" -f "$LAB_ROOT/Containerfile" "$LAB_ROOT"
+    echo 'Ready. In one terminal run ./lab gateway; in another run ./lab create.'
+    ;;
+  gateway)
+    require_install
+    [[ -S "$LAB_SOCKET" ]] || { echo 'Start the socket: systemctl --user start podman.socket' >&2; exit 1; }
+    osenv "$LAB_STATE/bin/openshell-gateway" --config "$LAB_ROOT/gateway.toml" config preflight
+    exec "${LAB_ENV[@]}" "$LAB_STATE/bin/openshell-gateway" --config "$LAB_ROOT/gateway.toml"
+    ;;
+  create)
+    require_install
+    os sandbox create --name "$LAB_SANDBOX" --from "$LAB_IMAGE" \
+      --policy "$LAB_ROOT/policy-deny.yaml" --no-auto-providers \
+      --detach --no-tty -- sleep infinity
+    ;;
+  allow)
+    os policy update "$LAB_SANDBOX" --rule-name github_read \
+      --binary /usr/bin/curl --add-endpoint api.github.com:443:read-only:rest:enforce --wait
+    ;;
+  demo)
+    require_install
+    echo '1. Verify filesystem access: workspace allowed; fake secret outside policy denied.'
+    remote sh -c 'echo hello > /sandbox/hello.txt; cat /sandbox/hello.txt'
+    remote python3 -c 'import pathlib; p=pathlib.Path("/opt/lab-private/example.txt")
+try:
+    p.read_text()
+except PermissionError:
+    print("PASS: filesystem policy denied the fake secret")
+else:
+    raise SystemExit("FAIL: fake secret was readable")'
+    echo '2. GET should be denied. Run this on a fresh sandbox, before ./lab allow.'
+    if remote curl -fsS --max-time 15 https://api.github.com/zen; then
+      echo 'FAIL: expected default-deny. Recreate the lab sandbox before repeating.' >&2; exit 1
+    fi
+    # A failed curl alone could be a network error; require policy denial evidence.
+    for attempt in {1..10}; do
+      LAB_LOGS=$(os logs "$LAB_SANDBOX" --since 5m --source sandbox 2>&1)
+      if grep -E 'DENIED.*api.github.com|api.github.com.*DENIED' <<< "$LAB_LOGS"; then break; fi
+      sleep 1
+    done
+    grep -Eq 'DENIED.*api.github.com|api.github.com.*DENIED' <<< "$LAB_LOGS" || {
+      echo 'FAIL: no policy-denial log; do not interpret a network failure as enforcement.' >&2; exit 1;
+    }
+    echo '3. Apply a read-only rule while the sandbox is running.'
+    "$LAB_ROOT/lab" allow
+    echo '4. GET should now succeed.'
+    remote curl -fsS --max-time 20 https://api.github.com/zen
+    echo
+    echo '5. POST to the same harmless /zen endpoint should return policy_denied.'
+    LAB_REPLY=$(remote curl -sS --max-time 20 -X POST https://api.github.com/zen)
+    printf '%s\n' "$LAB_REPLY"
+    grep -q 'policy_denied' <<< "$LAB_REPLY" || { echo 'FAIL: expected policy_denied' >&2; exit 1; }
+    echo 'PASS. Inspect with ./lab logs, ./lab inspect, or ./lab shell.'
+    ;;
+  shell) os sandbox connect "$LAB_SANDBOX" ;;
+  logs) os logs "$LAB_SANDBOX" --since 15m --source sandbox ;;
+  inspect)
+    os sandbox get "$LAB_SANDBOX"
+    os policy get "$LAB_SANDBOX" --base
+    echo
+    LAB_ID=$(os sandbox get "$LAB_SANDBOX" -o json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+    podman inspect --format '{{.Name}} network={{.HostConfig.NetworkMode}} privileged={{.HostConfig.Privileged}} user={{.Config.User}}' \
+      "openshell-default--$LAB_SANDBOX-$LAB_ID" "openshell-supervisor-$LAB_ID"
+    ;;
+  delete) os sandbox delete "$LAB_SANDBOX" ;;
+  cli) shift; os "$@" ;;
+  *)
+    cat <<'EOF'
+learn-openshell: OpenShell 0.1.7 learning lab (Linux x86_64, rootless Podman).
+  ./lab setup     Download verified binaries, start Podman socket, build tools image
+  ./lab gateway   Run the gateway in this terminal; Ctrl-C stops it
+  ./lab create    Start the learning sandbox with default-deny policy
+  ./lab demo      Exercise filesystem denial, network denial, and live read-only rule
+  ./lab shell     Open a shell in the sandbox
+  ./lab inspect   Show sandbox, policy, and local container topology
+  ./lab logs      Show supervisor policy decisions
+  ./lab allow     Add the read-only rule manually
+  ./lab delete    Delete only the learning sandbox (gateway must still be running)
+  ./lab cli ...   Use the pinned CLI with this lab's gateway and configuration
+EOF
+    ;;
+esac
