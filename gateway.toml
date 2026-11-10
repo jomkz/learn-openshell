@@ -1,0 +1,13 @@
+[openshell]
+version = 2
+
+[openshell.gateway]
+name = "learn-openshell"
+bind_address = "127.0.0.1:17671"
+compute_driver = "podman"
+
+[openshell.drivers.podman]
+image_pull_policy = "if_not_present"
+sandbox_runtime_image = "ghcr.io/nvidia/openshell/sandbox:0.1.7"
+supervisor_image = "ghcr.io/nvidia/openshell/supervisor:0.1.7"
+health_check_interval_secs = 10

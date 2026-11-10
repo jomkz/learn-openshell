@@ -1,0 +1,12 @@
+.local/
+__pycache__/
+
+# Local tooling, credentials, and environment overrides.
+.agents/
+.aws/
+.codex/
+.env
+.env.*
+!.env.example
+*.key
+*.pem
