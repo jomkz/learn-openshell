@@ -19,7 +19,7 @@ an appropriate TEE and attestation configuration.
 
 ## Where the sensitive state lives
 
-| Component | Local learning setup | Question for the cluster design |
+| Component | Podman path | Question for the cluster design |
 | --- | --- | --- |
 | Gateway | Host process; TLS, signing keys and database under `.local/` | Who can access its state and administer policy? |
 | Supervisor | Separate rootless container | Which exact pod or Deployment must move into the confidential VM? |

@@ -5,12 +5,31 @@ rootless Podman. The workload is a shell with curl and Python, so no GPU, LLM,
 API key, or Kubernetes cluster is needed. Explore how the supervisor enforces
 filesystem and network policies around an untrusted workload.
 
-The default Podman path exercises policy only. The optional
-[Kata / CoCo non-TEE path](docs/coco-nontee.md) runs the supervisor in a
-VM-backed Kubernetes pod. Neither path provides hardware confidentiality or
-attestation.
+The default Podman path exercises policy only. The optional Kata / CoCo path
+runs the supervisor in a VM-backed Kubernetes pod. Neither path provides
+hardware confidentiality or attestation.
 
-## Run it
+## Choose a lab
+
+| Path | What you run | Start here |
+| --- | --- | --- |
+| Podman | Gateway, supervisor, and agent as local rootless containers | [Podman path](#podman-path) |
+| Kata / CoCo without a TEE | Disposable K3s VM with the supervisor in a Kata guest | [Kata / CoCo guide](docs/coco-nontee.md) |
+
+For the Kata / CoCo path on a Linux x86_64 host with nested KVM:
+
+```bash
+./lab coco doctor
+./lab coco up
+./lab coco smoke
+./lab coco openshell
+./lab coco demo
+```
+
+The [Kata / CoCo guide](docs/coco-nontee.md) covers host requirements,
+inspection, and cleanup. The rest of the run instructions below cover Podman.
+
+## Podman path
 
 Requirements: Linux x86_64, Podman 5.x with cgroups v2, a systemd user session,
 curl, tar, sha256sum, and Python 3. OpenShell also requires Landlock and seccomp support;
@@ -70,7 +89,7 @@ podman run --rm --network none localhost/learn-openshell-tools:0.1.7 \
 The demo leaves the sandbox running so you can explore. It changes its policy;
 to repeat from default deny, run `./lab delete`, then `./lab create`.
 
-## Explore manually
+## Explore the Podman path
 
 ```bash
 ./lab inspect
@@ -97,7 +116,7 @@ The network exercise follows NVIDIA's
 [policy tutorial](https://docs.nvidia.com/openshell/v0.1.7/tutorials/first-network-policy),
 with a harmless POST target and explicit checks for policy-denial evidence.
 
-## What is running
+## Podman topology
 
 ```mermaid
 flowchart LR
@@ -163,7 +182,7 @@ A mocked or sample attestation result is not evidence of hardware protection.
 See [Confidential Containers exploration notes](docs/confidential-containers.md)
 for questions to investigate when extending this lab.
 
-## Stop and clean up
+## Stop and clean up the Podman path
 
 While the gateway is still running:
 
@@ -176,7 +195,7 @@ database, and cached images for next time. Start again with `./lab gateway`
 and `./lab create`. Do not delete `.local/` while the gateway or its sandboxes
 are running. The Podman user socket remains available for other applications.
 
-## Troubleshooting
+## Troubleshooting the Podman path
 
 - **Gateway unavailable:** keep terminal 1 running; check that port 17671 is free.
   Initial registration during setup warns that the gateway is not reachable;
