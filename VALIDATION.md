@@ -44,3 +44,31 @@ content were checked after that rename; the full runtime exercise was not repeat
 These checks exercise real OpenShell processes. They do not establish resistance
 to a kernel exploit, hardware memory confidentiality, attestation, protected
 provider credential release, or compatibility with a Kubernetes deployment.
+
+## Kata / CoCo non-TEE path
+
+The optional VM path was validated on the same x86_64 host on November 10,
+2026. It used Ubuntu 24.04 cloud image, K3s v1.35.9+k3s1, CoCo chart v0.23.0
+(OCI digest `sha256:b6e12a2a8f310155c38a969bce7d58df86f8eef7098a0775ae9458ee63344686`),
+Agent Sandbox v1.0.3, and OpenShell chart v0.1.7 (OCI digest
+`sha256:3e5998c749390a6be3a4f553e52e488b6f692e19be7b8bf681a26285d1e18901`).
+
+`./lab coco doctor`, `up`, `smoke`, `openshell`, and `demo` succeeded. Observed
+results:
+
+| Check | Result |
+| --- | --- |
+| Kata smoke pod | Ready with `kata-qemu-coco-dev`; `uname` showed Kata guest kernel `6.18.35`; QEMU process found on K3s node |
+| K3s NetworkPolicy | Client HTTP request succeeded before egress deny, failed afterward; server stayed reachable locally |
+| Supervisor placement | OpenShell supervisor pod Running with `kata-qemu-coco-dev` and QEMU process; gateway and agent pods used default runtime |
+| OpenShell filesystem | Fake secret read denied; workspace write allowed |
+| OpenShell network | GitHub GET denied with log evidence, then succeeded after live read-only rule; POST returned `policy_denied` |
+| Supervisor restart | Deployment rolled from one Kata pod to another; agent reconnected and an approved GET succeeded afterward |
+
+The VM was then stopped and restarted. Repeating `up` and `openshell`
+succeeded with the existing disk, chart releases, and CLI gateway registration.
+The validation sandbox was deleted and the VM was stopped; `.local/coco/`
+remains for a fresh demo run.
+
+These checks establish development Kata VM placement and policy behavior on
+this host. They do not establish TEE confidentiality or hardware attestation.

@@ -5,8 +5,10 @@ rootless Podman. The workload is a shell with curl and Python, so no GPU, LLM,
 API key, or Kubernetes cluster is needed. Explore how the supervisor enforces
 filesystem and network policies around an untrusted workload.
 
-**This is an OpenShell policy lab. It does not create a Confidential Container,
-perform attestation, or validate a Kubernetes deployment.**
+The default Podman path exercises policy only. The optional
+[Kata / CoCo non-TEE path](docs/coco-nontee.md) runs the supervisor in a
+VM-backed Kubernetes pod. Neither path provides hardware confidentiality or
+attestation.
 
 ## Run it
 
@@ -141,22 +143,22 @@ flowchart LR
     S --> E[Approved external API or inference endpoint]
 ```
 
-This is a proposed trust arrangement, not a deployment supplied by this lab.
-The secret delivery and gateway trust paths still need design and validation.
+This is a proposed trust arrangement, not the non-TEE deployment supplied by
+this lab. The secret delivery and gateway trust paths still need design and
+validation.
 The upstream [Confidential Containers architecture](https://confidentialcontainers.org/docs/architecture/)
 describes the confidential VM, trusted execution environment (TEE), and
 attestation components.
 
 | Learning stage | What it establishes | What remains unproven |
 | --- | --- | --- |
-| This Podman lab | Real OpenShell components and policy behavior | VM isolation, attestation, Kubernetes integration |
-| Kata / CoCo without a TEE | VM deployment and development plumbing | Hardware-backed confidentiality |
+| Podman path | Real OpenShell components and policy behavior | VM isolation, attestation, Kubernetes integration |
+| [Kata / CoCo non-TEE path](docs/coco-nontee.md) | Local K3s, Kata supervisor placement, and policy behavior | Hardware-backed confidentiality and attestation |
 | CoCo on TDX or SEV-SNP | Hardware-backed isolation, when configured and attested correctly | Protection of secrets outside the measured boundary |
 
 Upstream supports [CoCo development without confidential hardware](https://confidentialcontainers.org/docs/getting-started/prerequisites/hardware/nontee/).
-That is a useful second lab, but a `non-tee` deployment does not provide CoCo's
-confidentiality guarantees. A mocked or sample attestation result is not evidence
-of hardware protection.
+The `non-tee` deployment does not provide CoCo's confidentiality guarantees.
+A mocked or sample attestation result is not evidence of hardware protection.
 
 See [Confidential Containers exploration notes](docs/confidential-containers.md)
 for questions to investigate when extending this lab.

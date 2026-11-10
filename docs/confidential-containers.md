@@ -2,8 +2,8 @@
 
 These notes describe a possible extension of `learn-openshell`, based on the
 public OpenShell 0.1.7 source and Confidential Containers documentation. This
-repository implements the local Podman lab only; the confidential deployment
-discussed here has not been tested.
+repository also includes a [Kata / CoCo non-TEE lab](coco-nontee.md). The
+hardware confidential deployment discussed here has not been tested.
 
 ## Choose the boundary to protect
 
@@ -47,13 +47,12 @@ confidential. In the inspected 0.1.7 sources:
 - The [dedicated supervisor pod builder](https://github.com/NVIDIA/OpenShell/blob/v0.1.7/crates/openshell-driver-kubernetes/src/sandbox_runtime.rs)
   constructs its own PodSpec without a RuntimeClass field.
 - The [shared supervisor Deployment template](https://github.com/NVIDIA/OpenShell/blob/v0.1.7/deploy/helm/openshell/templates/supervisor.yaml)
-  also does not expose a supervisor RuntimeClass setting.
+  does not expose a supervisor RuntimeClass setting. The non-TEE lab sets it
+  with a targeted Helm post-renderer and rejects missing or ambiguous matches.
 
-This is a configuration gap to evaluate, not evidence that CoCo is impossible.
-A carefully targeted admission mutation or Helm post-render step might avoid
-product source changes. Those are candidates, not tested solutions here. They
-must survive recreation and upgrades and apply to the intended supervisor
-topology, without accidentally moving only the agent.
+This remains a configuration gap for deployments beyond the lab. A Helm
+upgrade must continue to use the post-renderer, and any topology or version
+change needs renewed placement checks.
 
 The local driver uses a Unix socket. Kubernetes uses a network channel; verify
 its authentication, NetworkPolicy enforcement, service reachability, readiness,
